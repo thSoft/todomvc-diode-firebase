@@ -8,10 +8,12 @@ The familiar TodoMVC application implemented in Diode React with Firebase persis
 ```
 git clone https://github.com/ochrons/diode.git
 cd diode
+git checkout b7792fbb60f12c6d83647ea0bd748b3560db6ef6
 sbt publishLocal
 cd ..
 git clone https://github.com/thSoft/firebase-scalajs
 cd firebase-scalajs
+git checkout 19a8c75e82ded82f37a690e2cd30e3dfea163865
 sbt publishLocal
 cd ..
 git clone https://github.com/thSoft/todomvc-diode-firebase
