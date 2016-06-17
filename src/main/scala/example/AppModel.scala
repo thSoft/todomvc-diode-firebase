@@ -14,17 +14,15 @@ case class AppModel(todos: Todos)
 
 case class TodoId(id: String)
 
-case class Todos(todoList: Seq[Todo])
+case class Todos(entries: Map[TodoId, Todo])
 
-case class Todo(id: TodoId, info: TodoInfo)
-
-case class TodoInfo(title: String, isCompleted: Boolean) {
-  def toJson: js.Any = upickle.json.writeJs(writeJs[TodoInfo](this)).asInstanceOf[js.Any]
+case class Todo(title: String, isCompleted: Boolean) {
+  def toJson: js.Any = upickle.json.writeJs(writeJs[Todo](this)).asInstanceOf[js.Any]
 }
 
-object TodoInfo {
-  def fromJson(json: js.Any): TodoInfo = {
-    readJs[TodoInfo](upickle.json.readJs(json))
+object Todo {
+  def fromJson(json: js.Any): Todo = {
+    readJs[Todo](upickle.json.readJs(json))
   }
 }
 
@@ -34,9 +32,9 @@ object TodoFilter {
 
   object All extends TodoFilter("", "All", _ => true)
 
-  object Active extends TodoFilter("active", "Active", !_.info.isCompleted)
+  object Active extends TodoFilter("active", "Active", !_.isCompleted)
 
-  object Completed extends TodoFilter("completed", "Completed", _.info.isCompleted)
+  object Completed extends TodoFilter("completed", "Completed", _.isCompleted)
 
   val values = List[TodoFilter](All, Active, Completed)
 }
@@ -44,21 +42,21 @@ object TodoFilter {
 // define actions
 case object Init extends Action
 
-case class Add(title: String) extends Action
+case class Add(todo: Todo) extends Action
 
-case class Added(todo: Todo) extends Action
+case class Added(id: TodoId, todo: Todo) extends Action
 
-case class Update(todo: Todo) extends Action
+case class Update(id: TodoId, todo: Todo) extends Action
 
-case class Updated(todo: Todo) extends Action
-
-case class Toggle(id: TodoId) extends Action
-
-case object ToggleAll extends Action
+case class Updated(id: TodoId, todo: Todo) extends Action
 
 case class Delete(id: TodoId) extends Action
 
 case class Deleted(id: TodoId) extends Action
+
+case class Toggle(id: TodoId) extends Action
+
+case object ToggleAll extends Action
 
 case object DeleteCompleted extends Action
 

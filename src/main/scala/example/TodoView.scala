@@ -12,6 +12,7 @@ object TodoView {
     onStartEditing: Callback,
     onUpdateTitle: String => Callback,
     onCancelEditing: Callback,
+    id: TodoId,
     todo: Todo,
     isEditing: Boolean)
 
@@ -27,7 +28,7 @@ object TodoView {
       )
 
     def resetText(p: Props): Callback =
-      $.modState(_.copy(editText = p.todo.info.title))
+      $.modState(_.copy(editText = p.todo.title))
 
     def editFieldKeyDown(p: Props): ReactKeyboardEvent => Option[Callback] =
       e => e.nativeEvent.keyCode match {
@@ -42,18 +43,18 @@ object TodoView {
     def render(p: Props, s: State): ReactElement = {
       <.li(
         ^.classSet(
-          "completed" -> p.todo.info.isCompleted,
+          "completed" -> p.todo.isCompleted,
           "editing" -> p.isEditing
         ),
         <.div(
           ^.className := "view",
           <.input.checkbox(
             ^.className := "toggle",
-            ^.checked := p.todo.info.isCompleted,
+            ^.checked := p.todo.isCompleted,
             ^.onChange --> p.onToggle
           ),
           <.label(
-            p.todo.info.title,
+            p.todo.title,
             ^.onDoubleClick --> p.onStartEditing
           ),
           <.button(
@@ -73,9 +74,9 @@ object TodoView {
   }
 
   val component = ReactComponentB[Props]("CTodoItem")
-    .initialState_P(p => State(p.todo.info.title))
+    .initialState_P(p => State(p.todo.title))
     .renderBackend[Backend].build
 
   def apply(P: Props) =
-    component.withKey(P.todo.id.id.toString)(P)
+    component.withKey(P.id.toString)(P)
 }

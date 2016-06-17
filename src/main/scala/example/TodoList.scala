@@ -19,7 +19,7 @@ object TodoList {
     def handleNewTodoKeyDown(dispatch: Action => Callback)(e: ReactKeyboardEventI): Option[Callback] = {
       val title = e.target.value.trim
       if (e.nativeEvent.keyCode == KeyCode.Enter && title.nonEmpty) {
-        Some(Callback(e.target.value = "") >> dispatch(Add(title)))
+        Some(Callback(e.target.value = "") >> dispatch(Add(Todo(title, false))))
       } else {
         None
       }
@@ -34,10 +34,10 @@ object TodoList {
     def render(p: Props, s: State) = {
       val proxy = p.proxy()
       val dispatch = (action: Action) => p.proxy.dispatch(action)
-      val todos = proxy.todoList
-      val filteredTodos = todos filter p.currentFilter.accepts
-      val activeCount = todos count TodoFilter.Active.accepts
-      val completedCount = todos.length - activeCount
+      val todos = proxy.entries
+      val filteredTodos = todos.filter(entry => p.currentFilter.accepts.apply(entry._2))
+      val activeCount = todos.count(entry => TodoFilter.Active.accepts.apply(entry._2))
+      val completedCount = todos.size - activeCount
 
       <.div(
         <.h1("todos"),
@@ -55,7 +55,7 @@ object TodoList {
       )
     }
 
-    def todoList(dispatch: Action => Callback, editing: Option[TodoId], todos: Seq[Todo], activeCount: Int) =
+    def todoList(dispatch: Action => Callback, editing: Option[TodoId], todos: Map[TodoId, Todo], activeCount: Int) =
       <.section(
         ^.className := "main",
         <.input.checkbox(
@@ -65,16 +65,20 @@ object TodoList {
         ),
         <.ul(
           ^.className := "todo-list",
-          todos.map(todo =>
+          todos.toSeq.map((entry) => {
+            val id = entry._1
+            val todo = entry._2
             TodoView(TodoView.Props(
-              onToggle = dispatch(Toggle(todo.id)),
-              onDelete = dispatch(Delete(todo.id)),
-              onStartEditing = startEditing(todo.id),
-              onUpdateTitle = title => dispatch(Update(todo.copy(info = todo.info.copy(title = title)))) >> editingDone(),
-              onCancelEditing = editingDone(),
-              todo = todo,
-              isEditing = editing.contains(todo.id)
+                onToggle = dispatch(Toggle(id)),
+                onDelete = dispatch(Delete(id)),
+                onStartEditing = startEditing(id),
+                onUpdateTitle = title => dispatch(Update(id, todo.copy(title = title))) >> editingDone(),
+                onCancelEditing = editingDone(),
+                id = id,
+                todo = todo,
+                isEditing = editing.contains(id)
             ))
+          }
           )
         )
       )

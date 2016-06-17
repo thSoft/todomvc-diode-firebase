@@ -18,28 +18,28 @@ import upickle.default.writeJs
   */
 object AppCircuit extends Circuit[AppModel] with ReactConnector[AppModel] {
   // define initial value for the application model
-  def initialModel = AppModel(Todos(Seq()))
+  def initialModel = AppModel(Todos(Map()))
 
   override val actionHandler = composeHandlers(
-    new TodoHandler(zoomRW(_.todos)((m, v) => m.copy(todos = v)).zoomRW(_.todoList)((m, v) => m.copy(todoList = v)), this)
+    new TodoHandler(zoomRW(_.todos)((m, v) => m.copy(todos = v)).zoomRW(_.entries)((m, v) => m.copy(entries = v)), this)
   )
 }
 
-class TodoHandler[M](modelRW: ModelRW[M, Seq[Todo]], dispatcher: Dispatcher) extends ActionHandler(modelRW) {
+class TodoHandler[M](modelRW: ModelRW[M, Map[TodoId, Todo]], dispatcher: Dispatcher) extends ActionHandler(modelRW) {
 
   //
-  def updateOne(id: TodoId)(f: TodoInfo => TodoInfo): Seq[Todo] =
+  def updateOne(id: TodoId)(f: Todo => Todo): Map[TodoId, Todo] =
     value.map {
-      case Todo(`id`, info) => Todo(id, f(info))
+      case (`id`, info) => (id, f(info))
       case other => other
     }
 
   def toggle(todo: Todo): Todo = {
-    todo.copy(info = todo.info.copy(isCompleted = !todo.info.isCompleted))
+    todo.copy(isCompleted = !todo.isCompleted)
   }
 
-  def updateRemote(todo: Todo): Future[Action] = {
-    firebase.child(todo.id.id).set(todo.info.toJson).toFuture.map(_ => NoAction)
+  def updateRemote(id: TodoId, todo: Todo): Future[Action] = {
+    firebase.child(id.id).set(todo.toJson).toFuture.map(_ => NoAction)
   }
 
   def removeRemote(id: TodoId): Future[Action] = {
@@ -52,36 +52,44 @@ class TodoHandler[M](modelRW: ModelRW[M, Seq[Todo]], dispatcher: Dispatcher) ext
     case Init =>
       effectOnly(Effect(Future {
         firebase.on("child_added", (snapshot: FirebaseDataSnapshot, previousKey: js.UndefOr[String]) =>
-          dispatcher.dispatch(Added(Todo(TodoId(snapshot.key()), TodoInfo.fromJson(snapshot.`val`()))))
+          dispatcher.dispatch(Added(TodoId(snapshot.key()), Todo.fromJson(snapshot.`val`())))
         )
         firebase.on("child_removed", (snapshot: FirebaseDataSnapshot, previousKey: js.UndefOr[String]) =>
           dispatcher.dispatch(Deleted(TodoId(snapshot.key())))
         )
         firebase.on("child_changed", (snapshot: FirebaseDataSnapshot, previousKey: js.UndefOr[String]) =>
-          dispatcher.dispatch(Updated(Todo(TodoId(snapshot.key()), TodoInfo.fromJson(snapshot.`val`()))))
+          dispatcher.dispatch(Updated(TodoId(snapshot.key()), Todo.fromJson(snapshot.`val`())))
         )
         NoAction
       }))
-    case Add(title) =>
+    case Add(info) =>
       effectOnly(Effect({
         val promise = Promise[Action]
-        firebase.push(TodoInfo(title, false).toJson, (value: js.Any) => {
+        firebase.push(info.toJson, (value: js.Any) => {
           promise.success(NoAction)
           ()
         })
         promise.future
       }))
-    case Added(todo) =>
-      updated(value :+ todo)
-    case Update(todo) =>
-      effectOnly(Effect(updateRemote(todo)))
-    case Updated(todo) =>
-      updated(updateOne(todo.id)(_ => todo.info))
+    case Added(id, todo) =>
+      updated(value + ((id, todo)))
+    case Update(id, todo) =>
+      effectOnly(Effect(updateRemote(id, todo)))
+    case Updated(id, todo) =>
+      updated(updateOne(id)(_ => todo))
+    case Delete(id) =>
+      effectOnly(Effect(
+        removeRemote(id)
+      ))
+    case Deleted(id) =>
+      updated(value.filterNot(_._1 == id))
     case Toggle(id) =>
       effectOnly(Effect(
-        Future.traverse(value)(todo => {
-          if (todo.id == id) {
-            updateRemote(toggle(todo))
+        Future.traverse(value)(entry => {
+          val entryId = entry._1
+          val todo = entry._2
+          if (entryId == id) {
+            updateRemote(id, toggle(todo))
           } else {
             Future()
           }
@@ -89,21 +97,19 @@ class TodoHandler[M](modelRW: ModelRW[M, Seq[Todo]], dispatcher: Dispatcher) ext
       ))
     case ToggleAll =>
       effectOnly(Effect(
-          Future.traverse(value)(todo => {
-            updateRemote(toggle(todo))
+          Future.traverse(value)(entry => {
+            val id = entry._1
+            val todo = entry._2
+            updateRemote(id, toggle(todo))
           }).map(_ => NoAction)
           ))
-    case Delete(id) =>
-      effectOnly(Effect(
-        removeRemote(id)
-      ))
-    case Deleted(id) =>
-      updated(value.filterNot(_.id == id))
     case DeleteCompleted =>
       effectOnly(Effect(
-        Future.traverse(value)(todo => {
-          if (todo.info.isCompleted) {
-            removeRemote(todo.id)
+        Future.traverse(value)(entry => {
+          val id = entry._1
+          val todo = entry._2
+          if (todo.isCompleted) {
+            removeRemote(id)
           } else {
             Future()
           }
